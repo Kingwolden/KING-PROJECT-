@@ -1,0 +1,156 @@
+<!doctype html><html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="theme-color" content="#080808"><title>KING — The Royal Maze v0.2</title><style>*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#080808}body{font-family:Arial,sans-serif;color:#f3d477;user-select:none;-webkit-user-select:none;touch-action:none}#app{height:100dvh;display:flex;flex-direction:column;align-items:center;background:radial-gradient(circle at 50% 35%,#2b220d,#100d08 35%,#080808 75%);padding-top:env(safe-area-inset-top)}header{width:min(94vw,520px);display:flex;justify-content:space-between;padding:10px 4px 7px;font-weight:900}.title{font-size:20px;letter-spacing:.08em}.stats{font-size:10px;text-align:right;line-height:1.45}#gameWrap{position:relative;width:min(94vw,520px);aspect-ratio:1;max-height:calc(100dvh - 145px)}canvas{width:100%;height:100%;display:block;border-radius:14px;border:1px solid #4a3a15;background:#0b0b0b;box-shadow:0 0 35px #000}.overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#050505e9;border-radius:14px;text-align:center;z-index:5}.hidden{display:none!important}.big{font:900 clamp(42px,13vw,72px) Georgia,serif;letter-spacing:.08em;text-shadow:0 0 22px #f3d47766}.sub{margin-top:7px;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:#d7bf78aa}button{border:1px solid #d9bd65;background:#17130a;color:#f5d47b;border-radius:12px;padding:14px 30px;font-weight:900;letter-spacing:.12em;margin-top:24px;font-size:15px}#note{height:62px;width:min(94vw,520px);display:flex;align-items:center;justify-content:center;text-align:center;color:#f3d47755;font-size:10px;letter-spacing:.07em}
+#toast{position:fixed;left:50%;top:42%;transform:translate(-50%,-50%);z-index:20;
+font:900 clamp(24px,7vw,48px) Georgia,serif;text-align:center;color:#f5d47b;
+text-shadow:0 3px #000,0 0 25px #f5d47b99;pointer-events:none;white-space:nowrap}
+#toast.hidden,#leaderboard.hidden,#pool.hidden{display:none}
+#leaderboard,#pool{position:fixed;inset:0;z-index:30;background:#050505e9;display:flex;
+align-items:center;justify-content:center;text-align:center}
+.lbbox{width:min(88vw,400px);padding:24px;border:1px solid #6c5728;border-radius:16px;
+background:#100d08;box-shadow:0 0 35px #000}
+.lbtitle{font:900 25px Georgia,serif;color:#f5d47b;margin-bottom:18px}
+.lbrow{display:flex;justify-content:space-between;padding:9px 5px;border-bottom:1px solid #6c572833}
+#poolCanvas{position:absolute;inset:0;width:100%;height:100%;background:#16527d}
+#poolText{position:relative;z-index:2;font:900 clamp(28px,8vw,58px) Georgia,serif;color:#fff;
+text-shadow:0 3px #111;letter-spacing:.05em}
+""</style></head><body><div id="app"><header><div class="title">👑 KING</div><div class="stats">LEVEL 01 · ❤️ x10<br>🕶️ <span id="score">0</span>/<span id="total">0</span> &nbsp; ❤️ <span id="lives">3</span></div></header><div id="gameWrap"><canvas id="game" width="560" height="560"></canvas><div id="menu" class="overlay"><div class="big">KING</div><div class="sub">THE ROYAL MAZE · v0.5b</div><button id="play">PLAY</button><div class="sub">Swipe anywhere to move.</div></div><div id="over" class="overlay hidden"><div class="big">GAME OVER</div><div class="sub">The Golems have won.</div><button id="retry">TRY AGAIN</button></div><div id="win" class="overlay hidden"><div class="big">ROYAL VICTORY</div><div class="sub">The Kingdom is safe.</div><button id="again">PLAY AGAIN</button><button id="showLb">LEADERBOARD</button></div></div><div id="note">👑 MOVE • 🕶️ COLLECT • 🍹 ROYAL MODE • 🗿 EAT GOLEMS</div></div><script>
+(()=>{const C=document.getElementById("game"),ctx=C.getContext("2d"),W=560,N=21,T=W/N;
+const L=[
+"111111111111111111111",
+"100000000000000000001",
+"101111111011111111101",
+"100000001000100000001",
+"101111101110111011101",
+"100100000000000001001",
+"101101111011110110101",
+"100001000000001000001",
+"111101011111101011111",
+"100000000000000000001",
+"101111011011011110101",
+"100000010000001000001",
+"101101111011110110101",
+"100100000000000001001",
+"101110111011101110101",
+"100000100000001000001",
+"101111101110111011101",
+"100000001000100000001",
+"101111111010111111101",
+"100000000000000000001",
+"111111111111111111111"
+];
+let g,k,gs,total,score,lives,power,run=false,dir={x:0,y:0},q={x:0,y:0},last=0,acc=0,audio=null;
+const scoreEl=document.getElementById("score"),totalEl=document.getElementById("total"),livesEl=document.getElementById("lives"),menu=document.getElementById("menu"),over=document.getElementById("over"),win=document.getElementById("win");
+function aud(){if(!audio)audio=new(window.AudioContext||window.webkitAudioContext)();if(audio.state==="suspended")audio.resume()}
+function tone(f,d,type="square",v=.035,delay=0){if(!audio)return;let o=audio.createOscillator(),a=audio.createGain(),t=audio.currentTime+delay;o.type=type;o.frequency.value=f;a.gain.setValueAtTime(.0001,t);a.gain.linearRampToValueAtTime(v,t+.008);a.gain.exponentialRampToValueAtTime(.0001,t+d);o.connect(a);a.connect(audio.destination);o.start(t);o.stop(t+d+.02)}
+const startS=()=>{tone(392,.08);tone(523,.08,"square",.035,.09);tone(784,.14,"square",.04,.18)},shadeS=()=>{tone(760,.045);tone(1020,.065,"square",.03,.045)},spritzS=()=>{tone(330,.08);tone(495,.08,"square",.035,.08);tone(740,.15,"square",.04,.16)},eatS=()=>{tone(470,.05);tone(720,.06,"square",.04,.05);tone(1020,.08,"square",.035,.11)},hitS=()=>{tone(180,.12,"sawtooth",.05);tone(110,.2,"sawtooth",.04,.1)},winS=()=>[523,659,784,1047].forEach((f,i)=>tone(f,.15,"square",.04,i*.12));
+function stats(){scoreEl.textContent=score;totalEl.textContent=total;livesEl.textContent=lives}
+function ok(x,y){return x>=0&&x<N&&y>=0&&y<N&&g[y][x]!==1}
+function open(d){let x=k.x+d.x,y=k.y+d.y;if(ok(x,y))q=d}
+function reset(){g=L.map(r=>r.split("").map(Number));k={x:10,y:9};score=0;lives=10;power=0;
+let cells=[[1,1],[3,1],[5,1],[7,1],[9,1],[11,1],[13,1],[15,1],[17,1],[19,1],[1,3],[3,3],[5,3],[7,3],[9,3],[11,3],[13,3],[15,3],[17,3],[19,3],[1,5],[3,5],[5,5],[7,5],[13,5],[15,5],[17,5],[19,5],[1,7],[5,7],[7,7],[9,7],[11,7],[13,7],[15,7],[19,7],[3,9],[5,9],[7,9],[13,9],[15,9],[17,9],[1,11],[5,11],[7,11],[9,11],[11,11],[13,11],[15,11],[19,11],[1,13],[3,13],[5,13],[7,13],[13,13],[15,13],[17,13],[19,13],[1,15],[5,15],[7,15],[9,15],[11,15],[13,15],[15,15],[19,15],[1,17],[3,17],[5,17],[7,17],[9,17],[11,17],[13,17],[15,17],[17,17],[19,17],[1,19],[3,19],[5,19],[7,19],[9,19],[11,19],[13,19],[15,19],[17,19],[19,19]];
+cells.forEach(([x,y])=>{if(g[y][x]===0)g[y][x]=2});[[3,3],[9,3],[15,3],[3,9],[17,9],[3,15],[9,15],[17,15],[5,19],[15,19]].forEach(([x,y])=>{if(g[y][x]===0)g[y][x]=3});
+gs=[[1,1,"chase"],[19,1,"random"],[19,19,"ambush"]].map(([x,y,type])=>{g[y][x]=0;return{x,y,hx:x,hy:y,type}});
+g[k.y][k.x]=0;total=0;for(let y=0;y<N;y++)for(let x=0;x<N;x++)if(g[y][x]===2)total++;stats()}
+function moveG(){for(const a of gs){let o=[[1,0],[-1,0],[0,1],[0,-1]].filter(d=>ok(a.x+d[0],a.y+d[1]));if(!o.length)continue;if(power>0)o.sort((A,B)=>(Math.abs(a.x+B[0]-k.x)+Math.abs(a.y+B[1]-k.y))-(Math.abs(a.x+A[0]-k.x)+Math.abs(a.y+A[1]-k.y)));else if(a.type==="random")o.sort(()=>Math.random()-.5);else{let tx=a.type==="ambush"?k.x+dir.x*3:k.x,ty=a.type==="ambush"?k.y+dir.y*3:k.y;o.sort((A,B)=>(Math.abs(a.x+A[0]-tx)+Math.abs(a.y+A[1]-ty))-(Math.abs(a.x+B[0]-tx)+Math.abs(a.y+B[1]-ty)))}let d=o[Math.random()<.65?0:Math.floor(Math.random()*o.length)];a.x+=d[0];a.y+=d[1]}}
+function hit(){for(const a of gs)if(a.x===k.x&&a.y===k.y){if(power>0){eatS();a.x=a.hx;a.y=a.hy}else{hitS();lives--;stats();if(lives<=0){run=false;over.classList.remove("hidden");return}k={x:10,y:9};dir={x:0,y:0};q={x:0,y:0};gs.forEach(a=>{a.x=a.hx;a.y=a.hy});return}}}
+function step(){if(!run)return;if(power>0)power--;let x=k.x+q.x,y=k.y+q.y;if((q.x||q.y)&&ok(x,y))dir=q;x=k.x+dir.x;y=k.y+dir.y;if(ok(x,y)){k.x=x;k.y=y}if(g[k.y][k.x]===2){g[k.y][k.x]=0;score++;shadeS();stats();if(score===total){run=false;win.classList.remove("hidden");winS();return}}if(g[k.y][k.x]===3){g[k.y][k.x]=0;power=125;spritzS()}moveG();hit()}
+function draw(){ctx.clearRect(0,0,W,W);for(let y=0;y<N;y++)for(let x=0;x<N;x++){let px=x*T,py=y*T;if(g[y][x]===1){ctx.fillStyle="#17120a";ctx.fillRect(px,py,T,T);ctx.strokeStyle="#6c5728";ctx.strokeRect(px+1,py+1,T-2,T-2)}else{ctx.fillStyle="#080808";ctx.fillRect(px,py,T,T);if(g[y][x]===2||g[y][x]===3){ctx.font=T*.62+"px Arial";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(g[y][x]===2?"🕶️":"🍹",px+T/2,py+T/2)}}}ctx.font=T*.72+"px Arial";ctx.textAlign="center";ctx.textBaseline="middle";for(const a of gs){ctx.globalAlpha=power>0?.5:1;ctx.fillText("🗿",a.x*T+T/2,a.y*T+T/2)}ctx.globalAlpha=1;ctx.shadowColor="#f5d47b";ctx.shadowBlur=power>0?22:10;ctx.fillText("👑",k.x*T+T/2,k.y*T+T/2);ctx.shadowBlur=0;if(power>0){ctx.fillStyle="#f3d477";ctx.font="900 13px Arial";ctx.fillText("🍹 ROYAL MODE",W/2,18)}}
+function loop(t){acc+=Math.min(50,t-(last||t)+16);last=t;if(acc>240){acc=0;step()}draw();requestAnimationFrame(loop)}
+function start(){aud();reset();run=true;dir={x:0,y:0};q={x:0,y:0};menu.classList.add("hidden");over.classList.add("hidden");win.classList.add("hidden");startS()}
+play.onclick=start;retry.onclick=start;again.onclick=start;
+let sx=0,sy=0;C.addEventListener("touchstart",e=>{let t=e.changedTouches[0];sx=t.clientX;sy=t.clientY},{passive:true});C.addEventListener("touchend",e=>{let t=e.changedTouches[0],dx=t.clientX-sx,dy=t.clientY-sy;if(Math.max(Math.abs(dx),Math.abs(dy))<25)return;open(Math.abs(dx)>Math.abs(dy)?(dx>0?{x:1,y:0}:{x:-1,y:0}):(dy>0?{x:0,y:1}:{x:0,y:-1}))},{passive:true});
+reset();requestAnimationFrame(loop)})();
+
+// ===== KING v0.5 =====
+const toastEl=document.getElementById("toast");
+const lbEl=document.getElementById("leaderboard");
+const rowsEl=document.getElementById("lbrows");
+const poolEl=document.getElementById("pool");
+const poolCanvas=document.getElementById("poolCanvas");
+const poolCtx=poolCanvas.getContext("2d");
+const poolText=document.getElementById("poolText");
+let toastTimer=0,poolActive=false,poolTouched=0,poolTriggered=false;
+
+function showToast(t,ms){
+  toastEl.textContent=t;toastEl.classList.remove("hidden");
+  clearTimeout(toastTimer);toastTimer=setTimeout(()=>toastEl.classList.add("hidden"),ms||800);
+}
+function saveKingScore(){
+  let a=[];try{a=JSON.parse(localStorage.getItem("king_scores_v05")||"[]")}catch(e){}
+  a.push(score);a.sort((x,y)=>y-x);a=a.slice(0,5);
+  try{localStorage.setItem("king_scores_v05",JSON.stringify(a))}catch(e){}
+}
+function renderLB(){
+  let a=[];try{a=JSON.parse(localStorage.getItem("king_scores_v05")||"[]")}catch(e){}
+  rowsEl.innerHTML=a.length?a.map((s,i)=>`<div class="lbrow"><span>${["🥇","🥈","🥉","4️⃣","5️⃣"][i]} KING</span><b>${s}</b></div>`).join(""):
+  '<div class="lbrow"><span>Ancora nessun King</span><span>—</span></div>';
+}
+document.getElementById("showLb").onclick=()=>{renderLB();lbEl.classList.remove("hidden")};
+document.getElementById("closeLb").onclick=()=>lbEl.classList.add("hidden");
+
+// Original arcade-style synthesized music: no external audio file.
+let musicTimer=null,musicOn=false,musicI=0;
+function arcadeMusic(){
+  if(!audio||!musicOn)return;
+  const n=[196,247,294,330,247,196,165,196][musicI++%8];
+  tone(n,.11,"square",.010);
+}
+function musicStart(){if(musicOn)return;musicOn=true;musicTimer=setInterval(arcadeMusic,180)}
+function musicStop(){musicOn=false;if(musicTimer)clearInterval(musicTimer);musicTimer=null}
+
+// Secret mini-level: DISHONESTY POOL.
+let peaches=[],poolStart=0;
+function startPool(){
+  if(poolActive)return;
+  poolActive=true;running=false;poolTouched=0;
+  peaches=Array.from({length:12},()=>({x:55+Math.random()*450,y:65+Math.random()*430,hit:false}));
+  poolEl.classList.remove("hidden");poolText.textContent="DISHONESTY POOL";
+  poolStart=performance.now();requestAnimationFrame(poolFrame);
+}
+function poolFrame(t){
+  if(!poolActive)return;
+  const left=120-Math.floor((t-poolStart)/100);
+  poolCtx.clearRect(0,0,560,560);
+  poolCtx.fillStyle="#16527d";poolCtx.fillRect(0,0,560,560);
+  poolCtx.globalAlpha=.35;poolCtx.strokeStyle="#8dd7ee";poolCtx.lineWidth=2;
+  for(let y=55;y<560;y+=55){poolCtx.beginPath();poolCtx.moveTo(0,y);poolCtx.quadraticCurveTo(140,y-12,280,y);poolCtx.quadraticCurveTo(420,y+12,560,y);poolCtx.stroke()}
+  poolCtx.globalAlpha=1;poolCtx.font="900 15px Arial";poolCtx.fillStyle="#fff";
+  poolCtx.fillText("DISHONESTY POOL",18,28);poolCtx.fillText("🍑 "+(peaches.length-poolTouched),470,28);
+  poolCtx.font="42px Arial";poolCtx.textAlign="center";poolCtx.textBaseline="middle";
+  peaches.forEach(p=>{if(!p.hit)poolCtx.fillText("🍑",p.x,p.y)});
+  poolCtx.fillText("👑",280,520);poolCtx.textAlign="left";
+  if(poolTouched===peaches.length){poolText.textContent="HAI COLPITO";setTimeout(endPool,900);return}
+  if(left<=0){endPool();return}
+  requestAnimationFrame(poolFrame);
+}
+poolCanvas.addEventListener("touchstart",e=>{
+  if(!poolActive)return;
+  const r=poolCanvas.getBoundingClientRect(),t=e.changedTouches[0];
+  const x=(t.clientX-r.left)*560/r.width,y=(t.clientY-r.top)*560/r.height;
+  peaches.forEach(p=>{if(!p.hit&&Math.hypot(x-p.x,y-p.y)<40){p.hit=true;poolTouched++;tone(650+poolTouched*20,.05)}});
+},{passive:true});
+function endPool(){poolActive=false;poolEl.classList.add("hidden");poolText.textContent="";running=true}
+
+// Decorate the existing step with King phrases and secret-level trigger.
+const baseStep=step;
+step=function(){
+  const oldScore=score,oldPower=power,oldLives=lives;
+  baseStep();
+  if(score>oldScore)showToast("MORDIMI",500);
+  if(power>oldPower)showToast("MORDIMI",700);
+  if(lives<oldLives&&lives>0)showToast("SEI ANDATO CON UN GOLEM",750);
+  if(!running&&lives<=0)showToast("NO KING",1000);
+  if(!running&&score===total){saveKingScore();showToast("SEI UN KING",1100)}
+  if(!poolTriggered&&total>0&&score>=Math.floor(total*.65)&&Math.random()<.20){
+    poolTriggered=true;startPool();
+  }
+};
+
+const baseStart=start;
+start=function(){baseStart();poolTriggered=false;musicStart()};
+</script>
+<div id="toast" class="hidden"></div>
+<div id="leaderboard" class="hidden"><div class="lbbox">
+<div class="lbtitle">👑 KING LEADERBOARD</div><div id="lbrows"></div>
+<button id="closeLb">CLOSE</button></div></div>
+<div id="pool" class="hidden"><canvas id="poolCanvas" width="560" height="560"></canvas><div id="poolText"></div></div>
+</body></html>
